@@ -5,26 +5,39 @@ function requestServerMachineStats() {
   }
 
   const machineQualitySelect = document.getElementById("machine-quality");
-  if (!machineQualitySelect) {
+  if (!(machineQualitySelect instanceof HTMLSelectElement)) {
     return;
   }
 
   machineQualitySelect.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function requestServerRecyclerStats() {
+  const recyclerQualitySelect = document.getElementById("recycler-quality");
+  if (!(recyclerQualitySelect instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  recyclerQualitySelect.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function syncModuleQualityOptionsToMaxUnlocked() {
-  const qualitySelects = Array.from(document.querySelectorAll('select[name^="machine_module_slot_"][name$="_quality"]'));
+  const qualitySelects = Array.from(document.querySelectorAll('select[name$="_quality"][name*="_module_slot_"]'));
   const allowedQualityOptions = getAllowedModuleQualityOptions();
   const highestAllowedQuality = allowedQualityOptions.length > 0
     ? allowedQualityOptions[allowedQualityOptions.length - 1].value
     : "normal";
 
-  if (qualitySelects.length === 0) {
-    requestServerMachineStats();
-    return;
-  }
-
   for (const qualitySelect of qualitySelects) {
+    if (!(qualitySelect instanceof HTMLSelectElement)) {
+      continue;
+    }
+
+    const nameMatch = String(qualitySelect.name ?? "").match(/^(machine|recycler)_module_slot_(\d+)_quality$/);
+    if (!nameMatch) {
+      continue;
+    }
+
     const currentValue = String(qualitySelect.value ?? "").toLowerCase();
     qualitySelect.innerHTML = "";
 
@@ -40,12 +53,14 @@ function syncModuleQualityOptionsToMaxUnlocked() {
       : highestAllowedQuality;
     qualitySelect.value = nextValue;
 
-    const slotIndex = qualitySelect.getAttribute("data-slot-index");
-    const moduleSelect = slotIndex ? document.getElementById(`machine-module-slot-${slotIndex}`) : null;
-    qualitySelect.disabled = !moduleSelect || moduleSelect.value === "";
+    const prefix = nameMatch[1];
+    const slotIndex = nameMatch[2];
+    const moduleSelect = document.querySelector(`select[name="${prefix}_module_slot_${slotIndex}"]`);
+    qualitySelect.disabled = !(moduleSelect instanceof HTMLSelectElement) || moduleSelect.value === "";
   }
 
   requestServerMachineStats();
+  requestServerRecyclerStats();
 }
 
 function resetMachineCountFieldsAboveMaxUnlocked() {
@@ -60,7 +75,7 @@ function resetMachineCountFieldsAboveMaxUnlocked() {
     }
 
     const input = document.getElementById(`${tier}-machines`);
-    if (!input) {
+    if (!(input instanceof HTMLInputElement)) {
       continue;
     }
 
@@ -79,7 +94,7 @@ function resetMachineCountFieldsAboveMaxUnlocked() {
 
 function syncMachineQualityFromMaxUnlocked() {
   const machineQualitySelect = document.getElementById("machine-quality");
-  if (!machineQualitySelect) {
+  if (!(machineQualitySelect instanceof HTMLSelectElement)) {
     return;
   }
 
@@ -109,6 +124,38 @@ function syncMachineQualityFromMaxUnlocked() {
   machineQualitySelect.value = hasCurrent ? currentValue : defaultQuality;
 }
 
+function syncRecyclerQualityFromMaxUnlocked() {
+  const recyclerQualitySelect = document.getElementById("recycler-quality");
+  if (!(recyclerQualitySelect instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  const maxUnlockedQuality = getMaxUnlockedQuality();
+  const maxRank = qualityRank.get(maxUnlockedQuality) ?? qualityRank.get("legendary");
+  const currentValue = String(recyclerQualitySelect.value ?? "").trim().toLowerCase();
+
+  recyclerQualitySelect.innerHTML = "";
+  let highestAllowedQuality = "normal";
+  for (const quality of qualityOrder) {
+    const rank = qualityRank.get(quality);
+    if (rank === undefined || rank > maxRank) {
+      continue;
+    }
+
+    const option = document.createElement("option");
+    option.value = quality;
+    option.textContent = formatQualityLabel(quality);
+    recyclerQualitySelect.appendChild(option);
+    highestAllowedQuality = quality;
+  }
+
+  const hasCurrent = Array.from(recyclerQualitySelect.options).some((option) => option.value === currentValue);
+  const defaultQuality = Array.from(recyclerQualitySelect.options).some((option) => option.value === "normal")
+    ? "normal"
+    : highestAllowedQuality;
+  recyclerQualitySelect.value = hasCurrent ? currentValue : defaultQuality;
+}
+
 function setupMachineStatRecalculationDelegation() {
   document.addEventListener("change", (event) => {
     const target = event.target;
@@ -117,19 +164,20 @@ function setupMachineStatRecalculationDelegation() {
     }
 
     const selectName = String(target.name ?? "");
-    const moduleCount = document.querySelectorAll('select[name^="machine_module_slot_"]:not([name$="_quality"])').length;
 
-    const moduleQualityMatch = selectName.match(/^machine_module_slot_(\d+)_quality$/);
+    const moduleQualityMatch = selectName.match(/^(machine|recycler)_module_slot_(\d+)_quality$/);
     if (moduleQualityMatch) {
-      const slotIndex = Number(moduleQualityMatch[1]);
+      const prefix = moduleQualityMatch[1];
+      const slotIndex = Number(moduleQualityMatch[2]);
       if (!Number.isFinite(slotIndex) || slotIndex <= 0) {
         return;
       }
 
+      const moduleCount = document.querySelectorAll(`select[name^="${prefix}_module_slot_"]:not([name$="_quality"])`).length;
       const sourceQualityValue = target.value;
       for (let i = slotIndex + 1; i <= moduleCount; i += 1) {
-        const downstreamModule = document.querySelector(`select[name="machine_module_slot_${i}"]`);
-        const downstreamQuality = document.querySelector(`select[name="machine_module_slot_${i}_quality"]`);
+        const downstreamModule = document.querySelector(`select[name="${prefix}_module_slot_${i}"]`);
+        const downstreamQuality = document.querySelector(`select[name="${prefix}_module_slot_${i}_quality"]`);
         if (!(downstreamModule instanceof HTMLSelectElement) || !(downstreamQuality instanceof HTMLSelectElement)) {
           continue;
         }
@@ -142,17 +190,20 @@ function setupMachineStatRecalculationDelegation() {
       return;
     }
 
-    const moduleSlotMatch = selectName.match(/^machine_module_slot_(\d+)$/);
+    const moduleSlotMatch = selectName.match(/^(machine|recycler)_module_slot_(\d+)$/);
     if (!moduleSlotMatch) {
       return;
     }
 
-    const slotIndex = Number(moduleSlotMatch[1]);
+    const prefix = moduleSlotMatch[1];
+    const slotIndex = Number(moduleSlotMatch[2]);
     if (!Number.isFinite(slotIndex) || slotIndex <= 0) {
       return;
     }
 
-    const qualitySelect = document.querySelector(`select[name="machine_module_slot_${slotIndex}_quality"]`);
+    const moduleCount = document.querySelectorAll(`select[name^="${prefix}_module_slot_"]:not([name$="_quality"])`).length;
+
+    const qualitySelect = document.querySelector(`select[name="${prefix}_module_slot_${slotIndex}_quality"]`);
     if (qualitySelect instanceof HTMLSelectElement) {
       qualitySelect.disabled = target.value === "";
       if (qualitySelect.disabled) {
@@ -160,18 +211,17 @@ function setupMachineStatRecalculationDelegation() {
       }
     }
 
-    // Cascade the module choice (and its quality) to all lower slots.
     const sourceModuleValue = target.value;
     const sourceQualityValue = qualitySelect instanceof HTMLSelectElement ? qualitySelect.value : "normal";
     for (let i = slotIndex + 1; i <= moduleCount; i += 1) {
-      const downstreamModule = document.querySelector(`select[name="machine_module_slot_${i}"]`);
+      const downstreamModule = document.querySelector(`select[name="${prefix}_module_slot_${i}"]`);
       if (!(downstreamModule instanceof HTMLSelectElement)) {
         continue;
       }
 
       downstreamModule.value = sourceModuleValue;
 
-      const downstreamQuality = document.querySelector(`select[name="machine_module_slot_${i}_quality"]`);
+      const downstreamQuality = document.querySelector(`select[name="${prefix}_module_slot_${i}_quality"]`);
       if (!(downstreamQuality instanceof HTMLSelectElement)) {
         continue;
       }

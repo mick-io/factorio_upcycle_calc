@@ -8,189 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/nes.css@2.3.0/css/nes.min.css">
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: linear-gradient(180deg, #f2efe7 0%, #ddd7c7 100%);
-      padding: 2rem 1rem;
-      font-family: "Press Start 2P", cursive;
-      line-height: 1.6;
-    }
-
-    button,
-    input,
-    select,
-    textarea {
-      font-family: "Press Start 2P", cursive;
-    }
-
-    .page {
-      max-width: 860px;
-      margin: 0 auto;
-    }
-
-    .actions {
-      margin-top: 1.5rem;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    #status {
-      min-height: 1.25rem;
-    }
-
-    .target-form {
-      margin-top: 1.75rem;
-    }
-
-    .target-quality-field {
-      max-width: 420px;
-      margin-top: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .quality-row {
-      margin-top: 1rem;
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      max-width: 860px;
-    }
-
-    .quality-row .target-quality-field {
-      margin-top: 0;
-      max-width: 100%;
-    }
-
-    .item-search-field {
-      max-width: 520px;
-      margin-top: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .form-group .item-search-field {
-      margin-top: 0;
-      max-width: 100%;
-    }
-
-    .form-groups {
-      margin-top: 1rem;
-      display: grid;
-      gap: 1.25rem;
-    }
-
-    .form-group .title {
-      font-size: 0.72rem;
-    }
-
-    .group-grid {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      align-items: start;
-    }
-
-    .group-grid .nes-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .group-grid .full-row {
-      grid-column: 1 / -1;
-    }
-
-    .module-slot-grid {
-      display: grid;
-      gap: 0.75rem;
-    }
-
-    .module-slot-row {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      align-items: start;
-    }
-
-    .module-slot-grid .nes-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .module-slot-row .nes-select,
-    .module-slot-row .nes-select select {
-      width: 100%;
-      max-width: 100%;
-    }
-
-    .group-grid label,
-    .target-quality-field label {
-      font-size: 0.72rem;
-      line-height: 1.4;
-      min-height: 2.2em;
-    }
-
-    .group-grid .nes-input,
-    .group-grid .nes-select,
-    .group-grid .nes-select select,
-    .target-quality-field .nes-select,
-    .target-quality-field .nes-select select {
-      width: 100%;
-      max-width: 100%;
-    }
-
-    @media (max-width: 760px) {
-      .quality-row {
-        grid-template-columns: 1fr;
-      }
-
-      .group-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .module-slot-row {
-        grid-template-columns: 1fr;
-      }
-
-      .group-grid label,
-      .target-quality-field label {
-        min-height: 0;
-      }
-    }
-
-    .machine-boxes {
-      margin-top: 2rem;
-      display: grid;
-      gap: 1rem;
-    }
-
-    .machine-box {
-      display: grid;
-      gap: 0.5rem;
-    }
-
-    .machine-box label {
-      font-size: 0.75rem;
-    }
-
-    .supporting-text {
-      margin-top: 0.75rem;
-      font-size: 0.7rem;
-    }
-
-    #item-load-status {
-      margin-top: 0.25rem;
-      font-size: 0.65rem;
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/app.css?v=20260215-7">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
@@ -307,14 +125,161 @@
           <section class="nes-container with-title is-rounded form-group">
             <p class="title">Recycler Fields</p>
             <div class="group-grid">
-              <div class="nes-field">
-                <label for="recycler-craft-speed">Recycler Craft Speed</label>
-                <input id="recycler-craft-speed" name="recycler_craft_speed" class="nes-input" type="number" step="0.01" value="1" required>
+              <input id="base-recycler-craft-speed" name="base_recycler_craft_speed" type="hidden" value="1">
+              <input id="base-recycler-quality-percentage" name="base_recycler_quality_percentage" type="hidden" value="0">
+              <input id="base-recycle-time-seconds-source" name="base_recycle_time_seconds_source" type="hidden" value="1">
+
+              <div class="nes-field full-row">
+                <label for="recycler-quality">Recycler Quality</label>
+                <div class="nes-select">
+                  <select id="recycler-quality" name="recycler_quality" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
+                    <option value="normal" selected>Normal</option>
+                    <option value="uncommon">Uncommon</option>
+                    <option value="rare">Rare</option>
+                    <option value="epic">Epic</option>
+                    <option value="legendary">Legendary</option>
+                  </select>
+                </div>
               </div>
 
-              <div class="nes-field">
+              <div id="recycler-module-field" class="nes-field full-row">
+                <label>Recycler Modules By Slot</label>
+                <div id="recycler-module-slots" class="module-slot-grid">
+                  <div class="module-slot-row">
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-1">Module Slot 1</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-1" name="recycler_module_slot_1" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
+                          <option value="">No Module</option>
+                          <option value="speed-module">Speed Module</option>
+                          <option value="speed-module-2">Speed Module 2</option>
+                          <option value="speed-module-3">Speed Module 3</option>
+                          <option value="productivity-module">Productivity Module</option>
+                          <option value="productivity-module-2">Productivity Module 2</option>
+                          <option value="productivity-module-3">Productivity Module 3</option>
+                          <option value="quality-module">Quality Module</option>
+                          <option value="quality-module-2">Quality Module 2</option>
+                          <option value="quality-module-3">Quality Module 3</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-1-quality">Slot 1 Module Quality</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-1-quality" name="recycler_module_slot_1_quality" data-slot-index="1" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form" disabled>
+                          <option value="normal">Normal</option>
+                          <option value="uncommon">Uncommon</option>
+                          <option value="rare">Rare</option>
+                          <option value="epic">Epic</option>
+                          <option value="legendary">Legendary</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="module-slot-row">
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-2">Module Slot 2</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-2" name="recycler_module_slot_2" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
+                          <option value="">No Module</option>
+                          <option value="speed-module">Speed Module</option>
+                          <option value="speed-module-2">Speed Module 2</option>
+                          <option value="speed-module-3">Speed Module 3</option>
+                          <option value="productivity-module">Productivity Module</option>
+                          <option value="productivity-module-2">Productivity Module 2</option>
+                          <option value="productivity-module-3">Productivity Module 3</option>
+                          <option value="quality-module">Quality Module</option>
+                          <option value="quality-module-2">Quality Module 2</option>
+                          <option value="quality-module-3">Quality Module 3</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-2-quality">Slot 2 Module Quality</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-2-quality" name="recycler_module_slot_2_quality" data-slot-index="2" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form" disabled>
+                          <option value="normal">Normal</option>
+                          <option value="uncommon">Uncommon</option>
+                          <option value="rare">Rare</option>
+                          <option value="epic">Epic</option>
+                          <option value="legendary">Legendary</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="module-slot-row">
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-3">Module Slot 3</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-3" name="recycler_module_slot_3" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
+                          <option value="">No Module</option>
+                          <option value="speed-module">Speed Module</option>
+                          <option value="speed-module-2">Speed Module 2</option>
+                          <option value="speed-module-3">Speed Module 3</option>
+                          <option value="productivity-module">Productivity Module</option>
+                          <option value="productivity-module-2">Productivity Module 2</option>
+                          <option value="productivity-module-3">Productivity Module 3</option>
+                          <option value="quality-module">Quality Module</option>
+                          <option value="quality-module-2">Quality Module 2</option>
+                          <option value="quality-module-3">Quality Module 3</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-3-quality">Slot 3 Module Quality</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-3-quality" name="recycler_module_slot_3_quality" data-slot-index="3" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form" disabled>
+                          <option value="normal">Normal</option>
+                          <option value="uncommon">Uncommon</option>
+                          <option value="rare">Rare</option>
+                          <option value="epic">Epic</option>
+                          <option value="legendary">Legendary</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="module-slot-row">
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-4">Module Slot 4</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-4" name="recycler_module_slot_4" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
+                          <option value="">No Module</option>
+                          <option value="speed-module">Speed Module</option>
+                          <option value="speed-module-2">Speed Module 2</option>
+                          <option value="speed-module-3">Speed Module 3</option>
+                          <option value="productivity-module">Productivity Module</option>
+                          <option value="productivity-module-2">Productivity Module 2</option>
+                          <option value="productivity-module-3">Productivity Module 3</option>
+                          <option value="quality-module">Quality Module</option>
+                          <option value="quality-module-2">Quality Module 2</option>
+                          <option value="quality-module-3">Quality Module 3</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="nes-field">
+                      <label for="recycler-module-slot-4-quality">Slot 4 Module Quality</label>
+                      <div class="nes-select">
+                        <select id="recycler-module-slot-4-quality" name="recycler_module_slot_4_quality" data-slot-index="4" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form" disabled>
+                          <option value="normal">Normal</option>
+                          <option value="uncommon">Uncommon</option>
+                          <option value="rare">Rare</option>
+                          <option value="epic">Epic</option>
+                          <option value="legendary">Legendary</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="recycler-craft-speed-field" class="nes-field">
+                <label for="recycler-craft-speed">Recycler Craft Speed</label>
+                <input id="recycler-craft-speed" name="recycler_craft_speed" class="nes-input" type="text" value="1" data-base-value="1" required readonly>
+              </div>
+
+              <div id="recycler-quality-percentage-field" class="nes-field">
                 <label for="recycler-quality-percentage">Recycler Quality (%)</label>
-                <input id="recycler-quality-percentage" name="recycler_quality_percentage" class="nes-input" type="number" step="0.01" value="0" required>
+                <input id="recycler-quality-percentage" name="recycler_quality_percentage" class="nes-input" type="text" value="0" data-base-value="0" required readonly>
               </div>
 
               <div class="nes-field">
@@ -322,9 +287,9 @@
                 <input id="base-recycle-input-per-cycle" name="base_recycle_input_per_cycle" class="nes-input" type="number" step="0.01" value="1" required>
               </div>
 
-              <div class="nes-field">
+              <div id="recycle-time-field" class="nes-field">
                 <label for="base-recycle-time-seconds">Recycle Cycle Time (s)</label>
-                <input id="base-recycle-time-seconds" name="base_recycle_time_seconds" class="nes-input" type="number" step="0.01" value="1" required>
+                <input id="base-recycle-time-seconds" name="base_recycle_time_seconds" class="nes-input" type="text" value="1" data-base-value="1" required readonly>
               </div>
             </div>
           </section>
@@ -376,9 +341,9 @@
       </div>
     </section>
   </main>
-  <script src="/static/js/quality.js?v=20260215-5"></script>
-  <script src="/static/js/machine-stats.js?v=20260215-5"></script>
-  <script src="/static/js/ui-dropdowns.js?v=20260215-5"></script>
-  <script src="/static/js/app.js?v=20260215-5"></script>
+  <script src="/static/js/quality.js?v=20260215-6"></script>
+  <script src="/static/js/machine-stats.js?v=20260215-6"></script>
+  <script src="/static/js/ui-dropdowns.js?v=20260215-6"></script>
+  <script src="/static/js/app.js?v=20260215-6"></script>
 </body>
 </html>

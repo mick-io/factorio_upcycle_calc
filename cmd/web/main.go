@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"html"
 	"log"
@@ -90,56 +89,6 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/index.html")
-	})
-	mux.HandleFunc("/api/recyclable-items", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(recyclableItems)
-	})
-	mux.HandleFunc("/api/item-details", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		item := strings.TrimSpace(r.URL.Query().Get("item"))
-		if item == "" {
-			http.Error(w, "item is required", http.StatusBadRequest)
-			return
-		}
-
-		details, err := wikiDetailsCache.GetOrFetch(item, fetchItemDetailsFromWiki)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(details)
-	})
-	mux.HandleFunc("/api/machine-details", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		machine := strings.TrimSpace(r.URL.Query().Get("machine"))
-		if machine == "" {
-			http.Error(w, "machine is required", http.StatusBadRequest)
-			return
-		}
-
-		details, err := machineDetailsCache.GetOrFetch(machine, fetchMachineDetailsFromWiki)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(details)
 	})
 	mux.HandleFunc("/partials/recyclable-items", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -326,6 +275,72 @@ func main() {
 		))
 		_, _ = w.Write([]byte(b.String()))
 	})
+	mux.HandleFunc("/partials/recycler-stats", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		baseCraftSpeed := parseFloatDefault(r.URL.Query().Get("base_recycler_craft_speed"), 1)
+		baseQuality := parseFloatDefault(r.URL.Query().Get("base_recycler_quality_percentage"), 0)
+		baseRecycleTimeSeconds := parseFloatDefault(r.URL.Query().Get("base_recycle_time_seconds_source"), 1)
+		if baseRecycleTimeSeconds <= 0 {
+			baseRecycleTimeSeconds = 1
+		}
+
+		recyclerQuality := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("recycler_quality")))
+		recyclerQualityMultiplier := qualityMultiplierByTierKey[recyclerQuality]
+		if recyclerQualityMultiplier <= 0 {
+			recyclerQualityMultiplier = 1
+		}
+
+		totalSpeedPercentModifier := 0.0
+		totalQualityBonus := 0.0
+		for i := 1; i <= 4; i++ {
+			moduleID := strings.TrimSpace(r.URL.Query().Get(fmt.Sprintf("recycler_module_slot_%d", i)))
+			if moduleID == "" {
+				continue
+			}
+
+			effects, ok := moduleEffectsByID[moduleID]
+			if !ok {
+				continue
+			}
+
+			moduleQuality := strings.ToLower(strings.TrimSpace(r.URL.Query().Get(fmt.Sprintf("recycler_module_slot_%d_quality", i))))
+			moduleQualityMultiplier := qualityMultiplierByTierKey[moduleQuality]
+			if moduleQualityMultiplier <= 0 {
+				moduleQualityMultiplier = 1
+			}
+
+			totalSpeedPercentModifier += effects.SpeedBonus * moduleQualityMultiplier
+			totalSpeedPercentModifier += effects.SpeedPenalty
+			totalQualityBonus += effects.QualityBonus * moduleQualityMultiplier
+			totalQualityBonus += effects.QualityPenalty
+		}
+
+		speedMultiplier := math.Max(0.2, 1+(totalSpeedPercentModifier/100))
+		effectiveCraftSpeed := (baseCraftSpeed * recyclerQualityMultiplier) * speedMultiplier
+		effectiveQuality := math.Max(0, baseQuality+totalQualityBonus)
+		effectiveRecycleTimeSeconds := baseRecycleTimeSeconds
+		if effectiveCraftSpeed > 0 {
+			effectiveRecycleTimeSeconds = baseRecycleTimeSeconds / effectiveCraftSpeed
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		var b strings.Builder
+		b.WriteString(renderItemStatus("Updated recycler stats", "is-primary", false))
+		b.WriteString(renderRecyclerStatFields(
+			effectiveCraftSpeed,
+			effectiveQuality,
+			effectiveRecycleTimeSeconds,
+			baseCraftSpeed,
+			baseQuality,
+			baseRecycleTimeSeconds,
+			true,
+		))
+		_, _ = w.Write([]byte(b.String()))
+	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -498,6 +513,14 @@ func parseFloat(value string, fieldName string) (float64, error) {
 		return 0, fmt.Errorf("invalid %s", fieldName)
 	}
 	return n, nil
+}
+
+func parseFloatDefault(value string, fallback float64) float64 {
+	n, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+		return fallback
+	}
+	return n
 }
 
 func renderAllocationSection(plan internal.PlanResult) string {
@@ -807,6 +830,41 @@ func renderMachineStatFields(
 		oobAttr,
 		html.EscapeString(qualityValue),
 		html.EscapeString(baseQualityValue),
+	)
+}
+
+func renderRecyclerStatFields(
+	craftSpeed float64,
+	quality float64,
+	recycleTimeSeconds float64,
+	baseCraftSpeed float64,
+	baseQuality float64,
+	baseRecycleTimeSeconds float64,
+	oob bool,
+) string {
+	oobAttr := ""
+	if oob {
+		oobAttr = ` hx-swap-oob="outerHTML"`
+	}
+
+	craftSpeedValue := formatStatValue(craftSpeed)
+	qualityValue := formatStatValue(quality)
+	recycleTimeValue := formatStatValue(recycleTimeSeconds)
+	baseCraftSpeedValue := formatStatValue(baseCraftSpeed)
+	baseQualityValue := formatStatValue(baseQuality)
+	baseRecycleTimeValue := formatStatValue(baseRecycleTimeSeconds)
+
+	return fmt.Sprintf(
+		`<div id="recycler-craft-speed-field" class="nes-field"%s><label for="recycler-craft-speed">Recycler Craft Speed</label><input id="recycler-craft-speed" name="recycler_craft_speed" class="nes-input" type="text" value="%s" data-base-value="%s" required readonly></div><div id="recycler-quality-percentage-field" class="nes-field"%s><label for="recycler-quality-percentage">Recycler Quality (%%)</label><input id="recycler-quality-percentage" name="recycler_quality_percentage" class="nes-input" type="text" value="%s" data-base-value="%s" required readonly></div><div id="recycle-time-field" class="nes-field"%s><label for="base-recycle-time-seconds">Recycle Cycle Time (s)</label><input id="base-recycle-time-seconds" name="base_recycle_time_seconds" class="nes-input" type="text" value="%s" data-base-value="%s" required readonly></div>`,
+		oobAttr,
+		html.EscapeString(craftSpeedValue),
+		html.EscapeString(baseCraftSpeedValue),
+		oobAttr,
+		html.EscapeString(qualityValue),
+		html.EscapeString(baseQualityValue),
+		oobAttr,
+		html.EscapeString(recycleTimeValue),
+		html.EscapeString(baseRecycleTimeValue),
 	)
 }
 

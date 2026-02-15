@@ -2,51 +2,18 @@ package internal
 
 import "testing"
 
-func TestBuildPlan_RoundsUpMachineCountsPerQuality(t *testing.T) {
-	plan, err := BuildPlan(PlanInput{
+func TestBuildPlanFromAnchorQuality_RoundsUpRequiredRecyclers(t *testing.T) {
+	plan, err := BuildPlanFromAnchorQuality(PlanInput{
 		TargetQuality:            QualityLegendary,
-		TotalCraftingMachines:    10,
-		Machine:                  Machine{Productivity: 0, CraftSpeed: 1, QualityPercentage: 10},
-		Recycler:                 Recycler{CraftSpeed: 1, QualityPercentage: 0},
-		BaseOutputPerCraft:       1,
-		BaseCraftTimeSeconds:     1,
-		BaseRecycleInputPerCycle: 1,
-		BaseRecycleTimeSeconds:   1,
-	})
-	if err != nil {
-		t.Fatalf("BuildPlan returned unexpected error: %v", err)
-	}
-
-	if got := plan.MachinesByQuality[QualityNormal]; got != 9 {
-		t.Fatalf("normal machines got %d, want 9", got)
-	}
-	if got := plan.MachinesByQuality[QualityUncommon]; got != 1 {
-		t.Fatalf("uncommon machines got %d, want 1", got)
-	}
-	if got := plan.MachinesByQuality[QualityRare]; got != 1 {
-		t.Fatalf("rare machines got %d, want 1", got)
-	}
-	if got := plan.MachinesByQuality[QualityEpic]; got != 1 {
-		t.Fatalf("epic machines got %d, want 1", got)
-	}
-	if got := plan.MachinesByQuality[QualityLegendary]; got != 1 {
-		t.Fatalf("legendary machines got %d, want 1", got)
-	}
-}
-
-func TestBuildPlan_RoundsUpRequiredRecyclers(t *testing.T) {
-	plan, err := BuildPlan(PlanInput{
-		TargetQuality:            QualityLegendary,
-		TotalCraftingMachines:    10,
 		Machine:                  Machine{Productivity: 0, CraftSpeed: 1, QualityPercentage: 0},
 		Recycler:                 Recycler{CraftSpeed: 1, QualityPercentage: 0},
 		BaseOutputPerCraft:       1,
 		BaseCraftTimeSeconds:     1,
 		BaseRecycleInputPerCycle: 0.3,
 		BaseRecycleTimeSeconds:   1,
-	})
+	}, QualityNormal, 10)
 	if err != nil {
-		t.Fatalf("BuildPlan returned unexpected error: %v", err)
+		t.Fatalf("BuildPlanFromAnchorQuality returned unexpected error: %v", err)
 	}
 
 	// Produced/s = 10, recycler/s = 0.3 => ceil(33.333...) = 34
@@ -103,19 +70,18 @@ func TestBuildPlanFromAnchorQuality_ErrorsOnZeroShareAnchor(t *testing.T) {
 	}
 }
 
-func TestBuildPlan_RecyclerLoadExcludesTargetQualityOutput(t *testing.T) {
-	plan, err := BuildPlan(PlanInput{
+func TestBuildPlanFromAnchorQuality_RecyclerLoadExcludesTargetQualityOutput(t *testing.T) {
+	plan, err := BuildPlanFromAnchorQuality(PlanInput{
 		TargetQuality:            QualityNormal,
-		TotalCraftingMachines:    20,
 		Machine:                  Machine{Productivity: 0, CraftSpeed: 1, QualityPercentage: 0},
 		Recycler:                 Recycler{CraftSpeed: 1, QualityPercentage: 0},
 		BaseOutputPerCraft:       1,
 		BaseCraftTimeSeconds:     1,
 		BaseRecycleInputPerCycle: 1,
 		BaseRecycleTimeSeconds:   1,
-	})
+	}, QualityNormal, 20)
 	if err != nil {
-		t.Fatalf("BuildPlan returned unexpected error: %v", err)
+		t.Fatalf("BuildPlanFromAnchorQuality returned unexpected error: %v", err)
 	}
 
 	if got := plan.RecycleLoadPerSecond; got != 0 {

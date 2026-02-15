@@ -6,7 +6,6 @@ import (
 )
 
 var (
-	errNonPositiveMachineCount      = errors.New("total crafting machines must be > 0")
 	errNonPositiveRecyclerCapacity  = errors.New("recycler throughput must be > 0")
 	errPlannerInvalidOutputQuantity = errors.New("base output values must be >= 0")
 	errNegativeAnchorMachineCount   = errors.New("anchor machine count must be >= 0")
@@ -15,7 +14,6 @@ var (
 
 type PlanInput struct {
 	TargetQuality            QualityTier
-	TotalCraftingMachines    int
 	Machine                  Machine
 	Recycler                 Recycler
 	BaseOutputPerCraft       float64
@@ -31,19 +29,6 @@ type PlanResult struct {
 	RecycleLoadPerSecond    float64
 	RecyclerPerSecond       float64
 	ExpectedOutputByQuality map[QualityTier]float64
-}
-
-// BuildPlan computes rounded-up machine allocations per quality tier and
-// rounded-up recycler count needed to support produced volume.
-func BuildPlan(input PlanInput) (PlanResult, error) {
-	if input.TotalCraftingMachines <= 0 {
-		return PlanResult{}, errNonPositiveMachineCount
-	}
-	if input.BaseOutputPerCraft < 0 || input.BaseRecycleInputPerCycle < 0 {
-		return PlanResult{}, errPlannerInvalidOutputQuantity
-	}
-
-	return buildPlanWithTotalMachines(input, float64(input.TotalCraftingMachines))
 }
 
 // BuildPlanFromAnchorQuality computes plan values by anchoring to a user-provided
@@ -133,7 +118,6 @@ func buildPlanWithTotalMachines(input PlanInput, totalMachines float64) (PlanRes
 
 func perSecondMachineAndRecycler(input PlanInput) (CraftResult, float64, error) {
 	perMachine, err := input.Machine.Craft(
-		Item{},
 		input.BaseOutputPerCraft,
 		input.BaseCraftTimeSeconds,
 		1,

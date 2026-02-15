@@ -16,13 +16,6 @@ const moduleQualityOptions = [
 
 const qualityOrder = ["normal", "uncommon", "rare", "epic", "legendary"];
 const qualityRank = new Map(qualityOrder.map((quality, index) => [quality, index]));
-const qualityMultiplierByTier = {
-  normal: 1.0,
-  uncommon: 1.3,
-  rare: 1.6,
-  epic: 1.9,
-  legendary: 2.5,
-};
 
 function getMaxUnlockedQuality() {
   const maxUnlockedInput = document.getElementById("max-quality-unlocked");

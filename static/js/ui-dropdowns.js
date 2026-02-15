@@ -35,14 +35,11 @@ function setupMaxQualityDropdown() {
   const syncFromMaxUnlocked = () => {
     syncTargetQualityOptionsToMaxUnlocked();
     syncMachineQualityFromMaxUnlocked();
+    syncRecyclerQualityFromMaxUnlocked();
     syncModuleQualityOptionsToMaxUnlocked();
     resetMachineCountFieldsAboveMaxUnlocked();
   };
 
   maxUnlockedSelect.addEventListener("change", syncFromMaxUnlocked);
   syncFromMaxUnlocked();
-}
-
-function setupTargetQualityDropdown() {
-  syncTargetQualityOptionsToMaxUnlocked();
 }

@@ -12,7 +12,7 @@ func TestMachineCraft_DistributesAcrossAllQualities(t *testing.T) {
 		QualityPercentage: 10,
 	}
 
-	result, err := m.Craft(Item{}, 1, 1, 1, QualityNormal, QualityLegendary)
+	result, err := m.Craft(1, 1, 1, QualityNormal, QualityLegendary)
 	if err != nil {
 		t.Fatalf("Craft returned unexpected error: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestMachineCraft_UsesCraftSpeedAndProductivity(t *testing.T) {
 		QualityPercentage: 0,
 	}
 
-	result, err := m.Craft(Item{}, 2, 4, 20, QualityNormal, QualityLegendary)
+	result, err := m.Craft(2, 4, 20, QualityNormal, QualityLegendary)
 	if err != nil {
 		t.Fatalf("Craft returned unexpected error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestMachineCraft_FoldsProbabilityIntoMaxUnlockedTier(t *testing.T) {
 		QualityPercentage: 20,
 	}
 
-	result, err := m.Craft(Item{}, 1, 1, 1, QualityNormal, QualityRare)
+	result, err := m.Craft(1, 1, 1, QualityNormal, QualityRare)
 	if err != nil {
 		t.Fatalf("Craft returned unexpected error: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestMachineCraft_StartsFromInputQuality(t *testing.T) {
 		QualityPercentage: 30,
 	}
 
-	result, err := m.Craft(Item{}, 1, 1, 1, QualityRare, QualityLegendary)
+	result, err := m.Craft(1, 1, 1, QualityRare, QualityLegendary)
 	if err != nil {
 		t.Fatalf("Craft returned unexpected error: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestMachineCraft_ValidatesQualityRange(t *testing.T) {
 		QualityPercentage: 10,
 	}
 
-	_, err := m.Craft(Item{}, 1, 1, 1, QualityEpic, QualityRare)
+	_, err := m.Craft(1, 1, 1, QualityEpic, QualityRare)
 	if err == nil {
 		t.Fatal("expected error when max unlocked quality is below input quality")
 	}

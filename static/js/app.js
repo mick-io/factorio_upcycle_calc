@@ -1,3 +1,2 @@
 setupMachineStatRecalculationDelegation();
 setupMaxQualityDropdown();
-setupTargetQualityDropdown();

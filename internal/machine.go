@@ -54,7 +54,6 @@ type Machine struct {
 
 // CraftResult is the expected-value output for a crafting interval.
 type CraftResult struct {
-	Item            Item
 	TotalOutput     float64
 	OutputByQuality map[QualityTier]float64
 }
@@ -63,7 +62,6 @@ type CraftResult struct {
 // Productivity increases output quantity, craft speed increases crafts performed,
 // and quality percentage distributes output across quality tiers.
 func (m Machine) Craft(
-	item Item,
 	baseOutputPerCraft float64,
 	baseCraftTimeSeconds float64,
 	durationSeconds float64,
@@ -103,7 +101,6 @@ func (m Machine) Craft(
 	}
 
 	return CraftResult{
-		Item:            item,
 		TotalOutput:     totalOutput,
 		OutputByQuality: outputByQuality,
 	}, nil

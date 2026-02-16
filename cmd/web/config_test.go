@@ -29,6 +29,12 @@ func TestLoadAppConfigFromEnv_Defaults(t *testing.T) {
 	if !cfg.RateLimit.Enabled {
 		t.Fatal("rate limiting should default to enabled")
 	}
+	if cfg.EnforceHTTPS {
+		t.Fatal("ENFORCE_HTTPS should default to false")
+	}
+	if !cfg.HTTPSTrustProxy {
+		t.Fatal("HTTPS_TRUST_PROXY should default to true")
+	}
 }
 
 func TestLoadAppConfigFromEnv_InvalidValueFailsFast(t *testing.T) {

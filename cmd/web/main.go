@@ -524,7 +524,14 @@ func main() {
 	addr := appCfg.Server.Addr
 	rateLimitConfig := appCfg.RateLimit
 	handler := withRequestLogging(
-		withMetrics(withSecurityHeaders(withRateLimit(mux, rateLimitConfig)), metricsCollector),
+		withMetrics(
+			withHTTPSRedirect(
+				withSecurityHeaders(withRateLimit(mux, rateLimitConfig)),
+				appCfg.EnforceHTTPS,
+				appCfg.HTTPSTrustProxy,
+			),
+			metricsCollector,
+		),
 		rateLimitConfig.TrustProxy,
 		log.Default(),
 	)

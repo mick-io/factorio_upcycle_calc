@@ -17,9 +17,12 @@ type serverRuntimeConfig struct {
 }
 
 type appConfig struct {
-	CacheDir  string
-	Server    serverRuntimeConfig
-	RateLimit rateLimitConfig
+	CacheDir        string
+	Server          serverRuntimeConfig
+	RateLimit       rateLimitConfig
+	RequireNonRoot  bool
+	EnforceHTTPS    bool
+	HTTPSTrustProxy bool
 }
 
 func loadAppConfigFromEnv() (appConfig, error) {
@@ -72,6 +75,21 @@ func loadAppConfigFromEnv() (appConfig, error) {
 	if err != nil {
 		return appConfig{}, err
 	}
+	requireNonRoot, err := parseEnvBoolStrict("REQUIRE_NON_ROOT", false)
+	if err != nil {
+		return appConfig{}, err
+	}
+	enforceHTTPS, err := parseEnvBoolStrict("ENFORCE_HTTPS", false)
+	if err != nil {
+		return appConfig{}, err
+	}
+	httpsTrustProxy, err := parseEnvBoolStrict("HTTPS_TRUST_PROXY", true)
+	if err != nil {
+		return appConfig{}, err
+	}
+	if requireNonRoot && os.Geteuid() == 0 {
+		return appConfig{}, fmt.Errorf("REQUIRE_NON_ROOT is enabled but process is running as root")
+	}
 
 	return appConfig{
 		CacheDir: cacheDir,
@@ -88,6 +106,9 @@ func loadAppConfigFromEnv() (appConfig, error) {
 			Burst:      rateBurst,
 			TrustProxy: rateTrustProxy,
 		},
+		RequireNonRoot:  requireNonRoot,
+		EnforceHTTPS:    enforceHTTPS,
+		HTTPSTrustProxy: httpsTrustProxy,
 	}, nil
 }
 

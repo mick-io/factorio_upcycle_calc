@@ -148,8 +148,8 @@ func withRateLimit(next http.Handler, cfg rateLimitConfig) http.Handler {
 	)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Static assets can be cached aggressively and are lower-risk.
-		if strings.HasPrefix(r.URL.Path, "/static/") {
+		// Static assets and operational endpoints should not consume limiter tokens.
+		if strings.HasPrefix(r.URL.Path, "/static/") || r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics" {
 			next.ServeHTTP(w, r)
 			return
 		}

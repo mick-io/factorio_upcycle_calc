@@ -125,6 +125,7 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/index.html")
 	})
+	mux.HandleFunc("/metrics", metricsHandler(metricsCollector))
 	mux.HandleFunc("/healthz", healthzHandler)
 	mux.HandleFunc("/readyz", readyzHandler(cacheDir))
 	mux.HandleFunc("/partials/recyclable-items", func(w http.ResponseWriter, r *http.Request) {
@@ -519,7 +520,7 @@ func main() {
 	addr := ":8080"
 	rateLimitConfig := loadRateLimitConfig()
 	handler := withRequestLogging(
-		withSecurityHeaders(withRateLimit(mux, rateLimitConfig)),
+		withMetrics(withSecurityHeaders(withRateLimit(mux, rateLimitConfig)), metricsCollector),
 		rateLimitConfig.TrustProxy,
 		log.Default(),
 	)

@@ -56,6 +56,7 @@ func (c *itemDetailsCache) Set(details ItemWikiDetails) error {
 
 func (c *itemDetailsCache) GetOrFetch(item string, fetch func(string) (ItemWikiDetails, error)) (ItemWikiDetails, error) {
 	if cached, ok := c.Get(item); ok {
+		metricsCollector.itemCacheHits.Add(1)
 		if cached.ProducersParsed {
 			return cached, nil
 		}
@@ -67,6 +68,7 @@ func (c *itemDetailsCache) GetOrFetch(item string, fetch func(string) (ItemWikiD
 		_ = c.Set(details)
 		return details, nil
 	}
+	metricsCollector.itemCacheMisses.Add(1)
 
 	details, err := fetch(item)
 	if err != nil {

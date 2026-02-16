@@ -58,6 +58,7 @@ func (c *machineDetailsCache) Set(details MachineWikiDetails) error {
 
 func (c *machineDetailsCache) GetOrFetch(machine string, fetch func(string) (MachineWikiDetails, error)) (MachineWikiDetails, error) {
 	if cached, ok := c.Get(machine); ok {
+		metricsCollector.machineCacheHits.Add(1)
 		if cached.DataParsed && cached.ModuleSlotsParsed && cached.CacheVersion == machineDetailsCacheVersion {
 			return cached, nil
 		}
@@ -69,6 +70,7 @@ func (c *machineDetailsCache) GetOrFetch(machine string, fetch func(string) (Mac
 		_ = c.Set(details)
 		return details, nil
 	}
+	metricsCollector.machineCacheMisses.Add(1)
 
 	details, err := fetch(machine)
 	if err != nil {

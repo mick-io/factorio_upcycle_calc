@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/mick-io/factorio_upcycle_calc/internal"
 )
@@ -104,6 +103,11 @@ func scaledModuleBonus(moduleID string, baseBonus float64, qualityMultiplier flo
 }
 
 func main() {
+	appCfg, err := loadAppConfigFromEnv()
+	if err != nil {
+		log.Fatalf("invalid runtime configuration: %v", err)
+	}
+
 	recyclableItems, err := loadRecyclableItems("docs/recyclable-items.txt")
 	if err != nil {
 		log.Printf("warning: failed to load recyclable items: %v", err)
@@ -121,7 +125,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	cacheDir := "docs/cache"
+	cacheDir := appCfg.CacheDir
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/index.html")
 	})
@@ -517,8 +521,8 @@ func main() {
 		_, _ = w.Write([]byte(renderAllocationSection(plan)))
 	})
 
-	addr := ":8080"
-	rateLimitConfig := loadRateLimitConfig()
+	addr := appCfg.Server.Addr
+	rateLimitConfig := appCfg.RateLimit
 	handler := withRequestLogging(
 		withMetrics(withSecurityHeaders(withRateLimit(mux, rateLimitConfig)), metricsCollector),
 		rateLimitConfig.TrustProxy,
@@ -528,11 +532,11 @@ func main() {
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      handler,
-		ReadTimeout:  parseEnvDuration("SERVER_READ_TIMEOUT", 10*time.Second),
-		WriteTimeout: parseEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
-		IdleTimeout:  parseEnvDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+		ReadTimeout:  appCfg.Server.ReadTimeout,
+		WriteTimeout: appCfg.Server.WriteTimeout,
+		IdleTimeout:  appCfg.Server.IdleTimeout,
 	}
-	shutdownTimeout := parseEnvDuration("SERVER_SHUTDOWN_TIMEOUT", 15*time.Second)
+	shutdownTimeout := appCfg.Server.ShutdownTimeout
 
 	serverErr := make(chan error, 1)
 	go func() {

@@ -121,9 +121,12 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	cacheDir := "docs/cache"
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/index.html")
 	})
+	mux.HandleFunc("/healthz", healthzHandler)
+	mux.HandleFunc("/readyz", readyzHandler(cacheDir))
 	mux.HandleFunc("/partials/recyclable-items", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

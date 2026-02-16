@@ -20,11 +20,14 @@
       <form
         id="planner-form"
         class="target-form"
+        autocomplete="off"
         hx-post="/plan"
+        hx-trigger="change delay:300ms from:input, change delay:300ms from:select"
+        hx-include="#allocation-result input"
         hx-target="#allocation-result"
         hx-swap="innerHTML"
       >
-        <input type="hidden" name="changed_quality" value="legendary">
+        <input type="hidden" name="changed_quality" value="normal">
         <div class="quality-row">
           <div class="target-quality-field">
             <label for="max-quality-unlocked">Max Quality Unlocked</label>
@@ -125,9 +128,9 @@
           <section class="nes-container with-title is-rounded form-group">
             <p class="title">Recycler Fields</p>
             <div class="group-grid">
-              <input id="base-recycler-craft-speed" name="base_recycler_craft_speed" type="hidden" value="1">
+              <input id="base-recycler-craft-speed" name="base_recycler_craft_speed" type="hidden" value="0.5">
               <input id="base-recycler-quality-percentage" name="base_recycler_quality_percentage" type="hidden" value="0">
-              <input id="base-recycle-time-seconds-source" name="base_recycle_time_seconds_source" type="hidden" value="1">
+              <input id="base-recycle-time-seconds-source" name="base_recycle_time_seconds_source" type="hidden" value="0.0625">
 
               <div class="nes-field full-row">
                 <label for="recycler-quality">Recycler Quality</label>
@@ -150,7 +153,7 @@
                       <label for="recycler-module-slot-1">Module Slot 1</label>
                       <div class="nes-select">
                         <select id="recycler-module-slot-1" name="recycler_module_slot_1" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
-                          <option value="">No Module</option>
+                          <option value="" selected>No Module</option>
                           <option value="speed-module">Speed Module</option>
                           <option value="speed-module-2">Speed Module 2</option>
                           <option value="speed-module-3">Speed Module 3</option>
@@ -181,7 +184,7 @@
                       <label for="recycler-module-slot-2">Module Slot 2</label>
                       <div class="nes-select">
                         <select id="recycler-module-slot-2" name="recycler_module_slot_2" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
-                          <option value="">No Module</option>
+                          <option value="" selected>No Module</option>
                           <option value="speed-module">Speed Module</option>
                           <option value="speed-module-2">Speed Module 2</option>
                           <option value="speed-module-3">Speed Module 3</option>
@@ -212,7 +215,7 @@
                       <label for="recycler-module-slot-3">Module Slot 3</label>
                       <div class="nes-select">
                         <select id="recycler-module-slot-3" name="recycler_module_slot_3" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
-                          <option value="">No Module</option>
+                          <option value="" selected>No Module</option>
                           <option value="speed-module">Speed Module</option>
                           <option value="speed-module-2">Speed Module 2</option>
                           <option value="speed-module-3">Speed Module 3</option>
@@ -243,7 +246,7 @@
                       <label for="recycler-module-slot-4">Module Slot 4</label>
                       <div class="nes-select">
                         <select id="recycler-module-slot-4" name="recycler_module_slot_4" hx-get="/partials/recycler-stats" hx-trigger="change" hx-target="#item-load-status" hx-swap="outerHTML" hx-include="#planner-form">
-                          <option value="">No Module</option>
+                          <option value="" selected>No Module</option>
                           <option value="speed-module">Speed Module</option>
                           <option value="speed-module-2">Speed Module 2</option>
                           <option value="speed-module-3">Speed Module 3</option>
@@ -274,7 +277,7 @@
 
               <div id="recycler-craft-speed-field" class="nes-field">
                 <label for="recycler-craft-speed">Recycler Craft Speed</label>
-                <input id="recycler-craft-speed" name="recycler_craft_speed" class="nes-input" type="text" value="1" data-base-value="1" required readonly>
+                <input id="recycler-craft-speed" name="recycler_craft_speed" class="nes-input" type="text" value="0.5" data-base-value="0.5" required readonly>
               </div>
 
               <div id="recycler-quality-percentage-field" class="nes-field">
@@ -289,56 +292,88 @@
 
               <div id="recycle-time-field" class="nes-field">
                 <label for="base-recycle-time-seconds">Recycle Cycle Time (s)</label>
-                <input id="base-recycle-time-seconds" name="base_recycle_time_seconds" class="nes-input" type="text" value="1" data-base-value="1" required readonly>
+                <input id="base-recycle-time-seconds" name="base_recycle_time_seconds" class="nes-input" type="text" value="0.125" data-base-value="0.125" required readonly>
               </div>
             </div>
           </section>
         </div>
-        <div class="actions">
-          <button type="submit" class="nes-btn is-success">Calculate allocation</button>
-        </div>
-        <p class="supporting-text">Edit any machine-per-quality field below. Other fields update automatically. Counts are rounded up.</p>
+        <p class="supporting-text">Edit total machines or any machine-per-quality field below. Other fields update automatically. Counts are rounded up.</p>
       </form>
       <div id="allocation-result">
         <section class="machine-boxes">
           <h3>Machines Dedicated Per Quality</h3>
+          <div class="machine-box total-machine-box">
+            <label for="total-machines">Total Machines</label>
+            <input id="total-machines" name="total_machines" class="nes-input" type="number" min="0" step="1" value="0" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form, #allocation-result input" hx-vals='{"changed_quality":"total"}'>
+          </div>
           <div class="machine-box">
             <label for="normal-machines">Normal</label>
             <input id="normal-machines" name="normal_machines" class="nes-input" type="number" min="0" step="1" value="0" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form" hx-vals='{"changed_quality":"normal"}'>
+            <p class="machine-ratio nes-text is-primary">Allocation Ratio: 0.00%</p>
           </div>
           <div class="machine-box">
             <label for="uncommon-machines">Uncommon</label>
             <input id="uncommon-machines" name="uncommon_machines" class="nes-input" type="number" min="0" step="1" value="0" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form" hx-vals='{"changed_quality":"uncommon"}'>
+            <p class="machine-ratio nes-text is-primary">Allocation Ratio: 0.00%</p>
           </div>
           <div class="machine-box">
             <label for="rare-machines">Rare</label>
             <input id="rare-machines" name="rare_machines" class="nes-input" type="number" min="0" step="1" value="0" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form" hx-vals='{"changed_quality":"rare"}'>
+            <p class="machine-ratio nes-text is-primary">Allocation Ratio: 0.00%</p>
           </div>
           <div class="machine-box">
             <label for="epic-machines">Epic</label>
             <input id="epic-machines" name="epic_machines" class="nes-input" type="number" min="0" step="1" value="0" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form" hx-vals='{"changed_quality":"epic"}'>
+            <p class="machine-ratio nes-text is-primary">Allocation Ratio: 0.00%</p>
           </div>
           <div class="machine-box">
             <label for="legendary-machines">Legendary</label>
             <input id="legendary-machines" name="legendary_machines" class="nes-input" type="number" min="0" step="1" value="0" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form" hx-vals='{"changed_quality":"legendary"}'>
+            <p class="machine-ratio nes-text is-primary">Allocation Ratio: 0.00%</p>
           </div>
-          <p class="nes-text is-success">Required Recyclers: 0</p>
-          <p class="nes-text is-primary">Produced/s: 0.0000 | To Recycle/s: 0.0000 | Recycler Input/s (each): 0.0000</p>
+          <p class="nes-text is-success">Recyclers Needed: 0</p>
+          <p class="nes-text is-primary">Total Crafted Output (items/s): 0.0000</p>
+          <p class="nes-text is-primary">Items Sent to Recyclers (items/s): 0.0000</p>
+          <p class="nes-text is-primary">Recycler Capacity per Machine (items/s): 0.0000</p>
+          <p class="nes-text is-primary">Target Quality Output (items/hour): 0.00</p>
+          <p class="nes-text is-primary">Total Items Recycled (items/hour): 0.00</p>
         </section>
+        <details class="calc-work">
+          <summary>Show Your Work</summary>
+          <div class="calc-work-content">
+            <p class="calc-line">Target Quality Output (items/s) = Total Crafted Output - Items Sent to Recyclers = 0.0000 - 0.0000 = 0.0000</p>
+            <p class="calc-line">Recyclers Needed = ceil(Items Sent to Recyclers / Recycler Capacity per Machine)</p>
+            <p class="calc-line">Machine allocation uses: Machines for tier = ceil(Total Machines Exact * Tier Ratio). Total Machines Exact = 0.0000</p>
+            <p class="calc-line">Normal Machines = ceil(0.0000 * 0.000000) = ceil(0.0000) = 0</p>
+            <p class="calc-line">Uncommon Machines = ceil(0.0000 * 0.000000) = ceil(0.0000) = 0</p>
+            <p class="calc-line">Rare Machines = ceil(0.0000 * 0.000000) = ceil(0.0000) = 0</p>
+            <p class="calc-line">Epic Machines = ceil(0.0000 * 0.000000) = ceil(0.0000) = 0</p>
+            <p class="calc-line">Legendary Machines = ceil(0.0000 * 0.000000) = ceil(0.0000) = 0</p>
+          </div>
+        </details>
       </div>
-      <div class="actions">
-        <button
-          hx-get="/healthz"
-          hx-trigger="click"
-          hx-target="#status"
-          hx-swap="innerHTML"
-          type="button"
-          class="nes-btn is-primary"
-        >
-          Check server
-        </button>
-        <p id="status" class="nes-text is-success"></p>
-      </div>
+      <section class="calculation-notes nes-container with-title is-rounded">
+        <p class="title">How Values Are Calculated</p>
+        <details class="calc-details">
+          <summary>Show Calculation Details</summary>
+          <p>
+            The planner models an upcycling loop. Items below the target quality are recycled and fed back into crafting.
+          </p>
+          <p>
+            Machine ratio per quality is solved from a steady-state loop:
+            craft by quality -> recycle below target -> return 25% of items -> repeat.
+          </p>
+          <p>
+            Recycler throughput (items/s each) = Recycler Input Per Cycle / Recycle Cycle Time.
+          </p>
+          <p>
+            Recyclers Needed = ceil(Items Sent to Recyclers / Recycler Capacity per Machine).
+          </p>
+          <p>
+            Machine counts are always rounded up so the displayed plan is buildable in-game.
+          </p>
+        </details>
+      </section>
     </section>
   </main>
   <script src="/static/js/quality.js?v=20260215-6"></script>

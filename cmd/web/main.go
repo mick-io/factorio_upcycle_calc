@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -21,6 +22,11 @@ type moduleEffect struct {
 	QualityBonus      float64
 	QualityPenalty    float64
 }
+
+const (
+	defaultRecipeCraftTimeSeconds = 1.0
+	recycleTimeDivisor            = 16.0
+)
 
 var qualityMultiplierByTierKey = map[string]float64{
 	"normal":    1.0,
@@ -67,6 +73,30 @@ var moduleEffectsByID = map[string]moduleEffect{
 		QualityBonus: 2.5,
 		SpeedPenalty: -5,
 	},
+}
+
+func isQualityModule(moduleID string) bool {
+	return strings.HasPrefix(strings.TrimSpace(strings.ToLower(moduleID)), "quality-module")
+}
+
+func roundScaledModuleBonus(moduleID string, value float64) float64 {
+	if value <= 0 {
+		return 0
+	}
+	// Factorio rounds module effects by type:
+	// - Quality module bonuses: round down to nearest 0.1%.
+	// - Non-quality module positive effects: round down to nearest 1%.
+	if isQualityModule(moduleID) {
+		return math.Floor(value*10) / 10
+	}
+	return math.Floor(value)
+}
+
+func scaledModuleBonus(moduleID string, baseBonus float64, qualityMultiplier float64) float64 {
+	if baseBonus <= 0 || qualityMultiplier <= 0 {
+		return 0
+	}
+	return roundScaledModuleBonus(moduleID, baseBonus*qualityMultiplier)
 }
 
 func main() {
@@ -150,6 +180,19 @@ func main() {
 		}
 
 		b.WriteString(renderRecipeFields(itemDetails.BaseOutputPerCraft, itemDetails.BaseCraftTimeSeconds, true))
+		baseRecycleTimeSource := recycleTimeSourceFromCraftTime(itemDetails.BaseCraftTimeSeconds)
+		b.WriteString(renderRecycleTimeSourceField(baseRecycleTimeSource, true))
+
+		recyclerStats := calculateRecyclerStats(r.URL.Query(), baseRecycleTimeSource)
+		b.WriteString(renderRecyclerStatFields(
+			recyclerStats.EffectiveCraftSpeed,
+			recyclerStats.EffectiveQuality,
+			recyclerStats.EffectiveRecycleTimeSeconds,
+			recyclerStats.BaseCraftSpeed,
+			recyclerStats.BaseQuality,
+			recyclerStats.BaseRecycleTimeSeconds,
+			true,
+		))
 		b.WriteString(renderCraftMachineField(itemDetails.Producers, selectedMachine, true))
 		b.WriteString(renderMachineModuleField(machineDetails.ModuleSlots, selectedMachine != "", maxUnlocked, true))
 		b.WriteString(renderMachineStatFields(
@@ -249,10 +292,10 @@ func main() {
 				moduleQualityMultiplier = 1
 			}
 
-			totalSpeedPercentModifier += effects.SpeedBonus * moduleQualityMultiplier
+			totalSpeedPercentModifier += scaledModuleBonus(moduleID, effects.SpeedBonus, moduleQualityMultiplier)
 			totalSpeedPercentModifier += effects.SpeedPenalty
-			totalProductivityBonus += effects.ProductivityBonus * moduleQualityMultiplier
-			totalQualityBonus += effects.QualityBonus * moduleQualityMultiplier
+			totalProductivityBonus += scaledModuleBonus(moduleID, effects.ProductivityBonus, moduleQualityMultiplier)
+			totalQualityBonus += scaledModuleBonus(moduleID, effects.QualityBonus, moduleQualityMultiplier)
 			totalQualityBonus += effects.QualityPenalty
 		}
 
@@ -281,71 +324,27 @@ func main() {
 			return
 		}
 
-		baseCraftSpeed := parseFloatDefault(r.URL.Query().Get("base_recycler_craft_speed"), 1)
-		baseQuality := parseFloatDefault(r.URL.Query().Get("base_recycler_quality_percentage"), 0)
-		baseRecycleTimeSeconds := parseFloatDefault(r.URL.Query().Get("base_recycle_time_seconds_source"), 1)
-		if baseRecycleTimeSeconds <= 0 {
-			baseRecycleTimeSeconds = 1
-		}
-
-		recyclerQuality := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("recycler_quality")))
-		recyclerQualityMultiplier := qualityMultiplierByTierKey[recyclerQuality]
-		if recyclerQualityMultiplier <= 0 {
-			recyclerQualityMultiplier = 1
-		}
-
-		totalSpeedPercentModifier := 0.0
-		totalQualityBonus := 0.0
-		for i := 1; i <= 4; i++ {
-			moduleID := strings.TrimSpace(r.URL.Query().Get(fmt.Sprintf("recycler_module_slot_%d", i)))
-			if moduleID == "" {
-				continue
-			}
-
-			effects, ok := moduleEffectsByID[moduleID]
-			if !ok {
-				continue
-			}
-
-			moduleQuality := strings.ToLower(strings.TrimSpace(r.URL.Query().Get(fmt.Sprintf("recycler_module_slot_%d_quality", i))))
-			moduleQualityMultiplier := qualityMultiplierByTierKey[moduleQuality]
-			if moduleQualityMultiplier <= 0 {
-				moduleQualityMultiplier = 1
-			}
-
-			totalSpeedPercentModifier += effects.SpeedBonus * moduleQualityMultiplier
-			totalSpeedPercentModifier += effects.SpeedPenalty
-			totalQualityBonus += effects.QualityBonus * moduleQualityMultiplier
-			totalQualityBonus += effects.QualityPenalty
-		}
-
-		speedMultiplier := math.Max(0.2, 1+(totalSpeedPercentModifier/100))
-		effectiveCraftSpeed := (baseCraftSpeed * recyclerQualityMultiplier) * speedMultiplier
-		effectiveQuality := math.Max(0, baseQuality+totalQualityBonus)
-		effectiveRecycleTimeSeconds := baseRecycleTimeSeconds
-		if effectiveCraftSpeed > 0 {
-			effectiveRecycleTimeSeconds = baseRecycleTimeSeconds / effectiveCraftSpeed
-		}
+		baseRecycleTimeSource := parseFloatDefault(
+			r.URL.Query().Get("base_recycle_time_seconds_source"),
+			recycleTimeSourceFromCraftTime(defaultRecipeCraftTimeSeconds),
+		)
+		recyclerStats := calculateRecyclerStats(r.URL.Query(), baseRecycleTimeSource)
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		var b strings.Builder
 		b.WriteString(renderItemStatus("Updated recycler stats", "is-primary", false))
 		b.WriteString(renderRecyclerStatFields(
-			effectiveCraftSpeed,
-			effectiveQuality,
-			effectiveRecycleTimeSeconds,
-			baseCraftSpeed,
-			baseQuality,
-			baseRecycleTimeSeconds,
+			recyclerStats.EffectiveCraftSpeed,
+			recyclerStats.EffectiveQuality,
+			recyclerStats.EffectiveRecycleTimeSeconds,
+			recyclerStats.BaseCraftSpeed,
+			recyclerStats.BaseQuality,
+			recyclerStats.BaseRecycleTimeSeconds,
 			true,
 		))
 		_, _ = w.Write([]byte(b.String()))
 	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
 	mux.HandleFunc("/plan", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -361,13 +360,7 @@ func main() {
 
 		changedQualityValue := strings.TrimSpace(r.FormValue("changed_quality"))
 		if changedQualityValue == "" {
-			changedQualityValue = strings.ToLower(targetQuality.String())
-		}
-		changedQuality, err := parseQualityTier(changedQualityValue)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid changed quality field.</p>`))
-			return
+			changedQualityValue = "normal"
 		}
 
 		machineProductivity, err := parseFloat(r.FormValue("machine_productivity"), "machine productivity")
@@ -433,19 +426,7 @@ func main() {
 			return
 		}
 
-		changedMachineField := fmt.Sprintf("%s_machines", strings.ToLower(changedQuality.String()))
-		anchorMachineCount, err := parseInt(r.FormValue(changedMachineField), changedMachineField)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = fmt.Fprintf(
-				w,
-				`<p class="nes-text is-error">Invalid machine count for %s.</p>`,
-				html.EscapeString(changedQuality.String()),
-			)
-			return
-		}
-
-		plan, err := internal.BuildPlanFromAnchorQuality(internal.PlanInput{
+		planInput := internal.PlanInput{
 			TargetQuality: targetQuality,
 			Machine: internal.Machine{
 				Productivity:      machineProductivity,
@@ -460,15 +441,57 @@ func main() {
 			BaseCraftTimeSeconds:     baseCraftTimeSeconds,
 			BaseRecycleInputPerCycle: baseRecycleInputPerCycle,
 			BaseRecycleTimeSeconds:   baseRecycleTimeSeconds,
-		}, changedQuality, anchorMachineCount)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = fmt.Fprintf(
-				w,
-				`<p class="nes-text is-error">Unable to build plan: %s</p>`,
-				html.EscapeString(err.Error()),
-			)
-			return
+		}
+
+		var plan internal.PlanResult
+		if strings.EqualFold(changedQualityValue, "total") {
+			totalMachines, err := parseInt(r.FormValue("total_machines"), "total_machines")
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid total machines.</p>`))
+				return
+			}
+
+			plan, err = internal.BuildPlanFromTotalMachines(planInput, totalMachines)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = fmt.Fprintf(
+					w,
+					`<p class="nes-text is-error">Unable to build plan: %s</p>`,
+					html.EscapeString(err.Error()),
+				)
+				return
+			}
+		} else {
+			changedQuality, err := parseQualityTier(changedQualityValue)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid changed quality field.</p>`))
+				return
+			}
+
+			changedMachineField := fmt.Sprintf("%s_machines", strings.ToLower(changedQuality.String()))
+			anchorMachineCount, err := parseInt(r.FormValue(changedMachineField), changedMachineField)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = fmt.Fprintf(
+					w,
+					`<p class="nes-text is-error">Invalid machine count for %s.</p>`,
+					html.EscapeString(changedQuality.String()),
+				)
+				return
+			}
+
+			plan, err = internal.BuildPlanFromAnchorQuality(planInput, changedQuality, anchorMachineCount)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = fmt.Fprintf(
+					w,
+					`<p class="nes-text is-error">Unable to build plan: %s</p>`,
+					html.EscapeString(err.Error()),
+				)
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -534,27 +557,94 @@ func renderAllocationSection(plan internal.PlanResult) string {
 
 	var b strings.Builder
 	b.WriteString(`<section class="machine-boxes"><h3>Machines Dedicated Per Quality</h3>`)
+	_, _ = fmt.Fprintf(
+		&b,
+		`<div class="machine-box total-machine-box"><label for="total-machines">Total Machines</label><input id="total-machines" name="total_machines" class="nes-input" type="number" min="0" step="1" value="%d" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form, #allocation-result input" hx-vals='{"changed_quality":"total"}'></div>`,
+		plan.TotalMachines,
+	)
 	for _, tier := range tiers {
 		slug := strings.ToLower(tier.String())
+		ratio := plan.MachineRatioByQuality[tier] * 100
 		_, _ = fmt.Fprintf(
 			&b,
-			`<div class="machine-box"><label for="%s-machines">%s</label><input id="%s-machines" name="%s_machines" class="nes-input" type="number" min="0" step="1" value="%d" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form" hx-vals='{"changed_quality":"%s"}'></div>`,
+			`<div class="machine-box"><label for="%s-machines">%s</label><input id="%s-machines" name="%s_machines" class="nes-input" type="number" min="0" step="1" value="%d" hx-post="/plan" hx-trigger="change, keyup delay:300ms" hx-target="#allocation-result" hx-swap="innerHTML" hx-include="#planner-form" hx-vals='{"changed_quality":"%s"}'><p class="machine-ratio nes-text is-primary">Allocation Ratio: %.2f%%</p></div>`,
 			slug,
 			tier.String(),
 			slug,
 			slug,
 			plan.MachinesByQuality[tier],
 			slug,
+			ratio,
 		)
 	}
+	targetPerSecond := math.Max(0, plan.ProducedPerSecond-plan.RecycleLoadPerSecond)
+	targetPerHour := targetPerSecond * 3600
+	recycledPerHour := plan.RecycleLoadPerSecond * 3600
 	_, _ = fmt.Fprintf(
 		&b,
-		`<p class="nes-text is-success">Required Recyclers: %d</p><p class="nes-text is-primary">Produced/s: %.4f | To Recycle/s: %.4f | Recycler Input/s (each): %.4f</p></section>`,
+		`<p class="nes-text is-success">Recyclers Needed: %d</p><p class="nes-text is-primary">Total Crafted Output (items/s): %.4f</p><p class="nes-text is-primary">Items Sent to Recyclers (items/s): %.4f</p><p class="nes-text is-primary">Recycler Capacity per Machine (items/s): %.4f</p><p class="nes-text is-primary">Target Quality Output (items/hour): %.2f</p><p class="nes-text is-primary">Total Items Recycled (items/hour): %.2f</p></section>`,
 		plan.RequiredRecyclers,
 		plan.ProducedPerSecond,
 		plan.RecycleLoadPerSecond,
 		plan.RecyclerPerSecond,
+		targetPerHour,
+		recycledPerHour,
 	)
+	b.WriteString(renderCalculationWork(plan))
+	return b.String()
+}
+
+func renderCalculationWork(plan internal.PlanResult) string {
+	tiers := []internal.QualityTier{
+		internal.QualityNormal,
+		internal.QualityUncommon,
+		internal.QualityRare,
+		internal.QualityEpic,
+		internal.QualityLegendary,
+	}
+
+	targetPerSecond := math.Max(0, plan.ProducedPerSecond-plan.RecycleLoadPerSecond)
+	recyclerQuotient := 0.0
+	if plan.RecyclerPerSecond > 0 {
+		recyclerQuotient = plan.RecycleLoadPerSecond / plan.RecyclerPerSecond
+	}
+
+	var b strings.Builder
+	b.WriteString(`<details class="calc-work"><summary>Show Your Work</summary><div class="calc-work-content">`)
+	_, _ = fmt.Fprintf(
+		&b,
+		`<p class="calc-line">Target Quality Output (items/s) = Total Crafted Output - Items Sent to Recyclers = %.4f - %.4f = %.4f</p>`,
+		plan.ProducedPerSecond,
+		plan.RecycleLoadPerSecond,
+		targetPerSecond,
+	)
+	_, _ = fmt.Fprintf(
+		&b,
+		`<p class="calc-line">Recyclers Needed = ceil(Items Sent to Recyclers / Recycler Capacity per Machine) = ceil(%.4f / %.4f) = ceil(%.4f) = %d</p>`,
+		plan.RecycleLoadPerSecond,
+		plan.RecyclerPerSecond,
+		recyclerQuotient,
+		plan.RequiredRecyclers,
+	)
+	_, _ = fmt.Fprintf(
+		&b,
+		`<p class="calc-line">Machine allocation uses: Machines for tier = ceil(Total Machines Exact * Tier Ratio). Total Machines Exact = %.4f</p>`,
+		plan.TotalMachinesExact,
+	)
+	for _, tier := range tiers {
+		ratio := plan.MachineRatioByQuality[tier]
+		rawMachines := plan.TotalMachinesExact * ratio
+		_, _ = fmt.Fprintf(
+			&b,
+			`<p class="calc-line">%s Machines = ceil(%.4f * %.6f) = ceil(%.4f) = %d</p>`,
+			html.EscapeString(tier.String()),
+			plan.TotalMachinesExact,
+			ratio,
+			rawMachines,
+			plan.MachinesByQuality[tier],
+		)
+	}
+	b.WriteString(`</div></details>`)
 	return b.String()
 }
 
@@ -866,6 +956,93 @@ func renderRecyclerStatFields(
 		html.EscapeString(recycleTimeValue),
 		html.EscapeString(baseRecycleTimeValue),
 	)
+}
+
+func renderRecycleTimeSourceField(recycleTimeSource float64, oob bool) string {
+	oobAttr := ""
+	if oob {
+		oobAttr = ` hx-swap-oob="outerHTML"`
+	}
+
+	value := formatStatValue(recycleTimeSource)
+	return fmt.Sprintf(
+		`<input id="base-recycle-time-seconds-source" name="base_recycle_time_seconds_source" type="hidden" value="%s"%s>`,
+		html.EscapeString(value),
+		oobAttr,
+	)
+}
+
+type recyclerStats struct {
+	EffectiveCraftSpeed         float64
+	EffectiveQuality            float64
+	EffectiveRecycleTimeSeconds float64
+	BaseCraftSpeed              float64
+	BaseQuality                 float64
+	BaseRecycleTimeSeconds      float64
+}
+
+func recycleTimeSourceFromCraftTime(baseCraftTimeSeconds float64) float64 {
+	if baseCraftTimeSeconds <= 0 {
+		baseCraftTimeSeconds = defaultRecipeCraftTimeSeconds
+	}
+	return baseCraftTimeSeconds / recycleTimeDivisor
+}
+
+func calculateRecyclerStats(values url.Values, baseRecycleTimeSeconds float64) recyclerStats {
+	baseCraftSpeed := parseFloatDefault(values.Get("base_recycler_craft_speed"), 0.5)
+	baseQuality := parseFloatDefault(values.Get("base_recycler_quality_percentage"), 0)
+	if baseRecycleTimeSeconds <= 0 {
+		baseRecycleTimeSeconds = recycleTimeSourceFromCraftTime(defaultRecipeCraftTimeSeconds)
+	}
+
+	recyclerQuality := strings.ToLower(strings.TrimSpace(values.Get("recycler_quality")))
+	recyclerQualityMultiplier := qualityMultiplierByTierKey[recyclerQuality]
+	if recyclerQualityMultiplier <= 0 {
+		recyclerQualityMultiplier = 1
+	}
+
+	totalSpeedPercentModifier := 0.0
+	totalQualityBonus := 0.0
+	for i := 1; i <= 4; i++ {
+		moduleID := strings.TrimSpace(values.Get(fmt.Sprintf("recycler_module_slot_%d", i)))
+		if moduleID == "" {
+			continue
+		}
+
+		effects, ok := moduleEffectsByID[moduleID]
+		if !ok {
+			continue
+		}
+
+		moduleQuality := strings.ToLower(strings.TrimSpace(values.Get(fmt.Sprintf("recycler_module_slot_%d_quality", i))))
+		moduleQualityMultiplier := qualityMultiplierByTierKey[moduleQuality]
+		if moduleQualityMultiplier <= 0 {
+			moduleQualityMultiplier = 1
+		}
+
+		totalSpeedPercentModifier += scaledModuleBonus(moduleID, effects.SpeedBonus, moduleQualityMultiplier)
+		totalSpeedPercentModifier += effects.SpeedPenalty
+		totalQualityBonus += scaledModuleBonus(moduleID, effects.QualityBonus, moduleQualityMultiplier)
+		totalQualityBonus += effects.QualityPenalty
+	}
+
+	speedMultiplier := math.Max(0.2, 1+(totalSpeedPercentModifier/100))
+	effectiveCraftSpeed := (baseCraftSpeed * recyclerQualityMultiplier) * speedMultiplier
+	effectiveQuality := math.Max(0, baseQuality+totalQualityBonus)
+
+	effectiveRecycleTimeSeconds := baseRecycleTimeSeconds
+	if effectiveCraftSpeed > 0 {
+		effectiveRecycleTimeSeconds = baseRecycleTimeSeconds / effectiveCraftSpeed
+	}
+
+	return recyclerStats{
+		EffectiveCraftSpeed:         effectiveCraftSpeed,
+		EffectiveQuality:            effectiveQuality,
+		EffectiveRecycleTimeSeconds: effectiveRecycleTimeSeconds,
+		BaseCraftSpeed:              baseCraftSpeed,
+		BaseQuality:                 baseQuality,
+		BaseRecycleTimeSeconds:      baseRecycleTimeSeconds,
+	}
 }
 
 func formatStatValue(value float64) string {

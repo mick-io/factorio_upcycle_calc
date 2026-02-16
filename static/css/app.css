@@ -19,18 +19,6 @@ textarea {
   margin: 0 auto;
 }
 
-.actions {
-  margin-top: 1.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-#status {
-  min-height: 1.25rem;
-}
-
 .target-form {
   margin-top: 1.75rem;
 }
@@ -170,6 +158,15 @@ textarea {
   font-size: 0.75rem;
 }
 
+.total-machine-box {
+  margin-bottom: 0.25rem;
+}
+
+.machine-ratio {
+  margin: 0.2rem 0 0;
+  font-size: 0.6rem;
+}
+
 .supporting-text {
   margin-top: 0.75rem;
   font-size: 0.7rem;
@@ -178,4 +175,44 @@ textarea {
 #item-load-status {
   margin-top: 0.25rem;
   font-size: 0.65rem;
+}
+
+.calculation-notes {
+  margin-top: 1.5rem;
+}
+
+.calc-details {
+  margin-top: 0.35rem;
+}
+
+.calc-details summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.calc-details p {
+  margin: 0.65rem 0 0;
+  font-size: 0.62rem;
+  line-height: 1.6;
+}
+
+.calc-work {
+  margin-top: 0.75rem;
+}
+
+.calc-work summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.calc-work-content {
+  margin-top: 0.6rem;
+}
+
+.calc-line {
+  margin: 0.45rem 0 0;
+  font-size: 0.6rem;
+  line-height: 1.6;
 }

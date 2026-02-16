@@ -1,2 +1,3 @@
 setupMachineStatRecalculationDelegation();
+resetRecyclerModuleDefaults();
 setupMaxQualityDropdown();

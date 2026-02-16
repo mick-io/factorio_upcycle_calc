@@ -21,6 +21,32 @@ function requestServerRecyclerStats() {
   recyclerQualitySelect.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function resetRecyclerModuleDefaults() {
+  const moduleSelects = Array.from(
+    document.querySelectorAll('select[name^="recycler_module_slot_"]:not([name$="_quality"])'),
+  );
+  const qualitySelects = Array.from(
+    document.querySelectorAll('select[name^="recycler_module_slot_"][name$="_quality"]'),
+  );
+
+  for (const moduleSelect of moduleSelects) {
+    if (!(moduleSelect instanceof HTMLSelectElement)) {
+      continue;
+    }
+    moduleSelect.value = "";
+  }
+
+  for (const qualitySelect of qualitySelects) {
+    if (!(qualitySelect instanceof HTMLSelectElement)) {
+      continue;
+    }
+
+    const hasNormalOption = Array.from(qualitySelect.options).some((option) => option.value === "normal");
+    qualitySelect.value = hasNormalOption ? "normal" : (qualitySelect.options[0]?.value ?? "");
+    qualitySelect.disabled = true;
+  }
+}
+
 function syncModuleQualityOptionsToMaxUnlocked() {
   const qualitySelects = Array.from(document.querySelectorAll('select[name$="_quality"][name*="_module_slot_"]'));
   const allowedQualityOptions = getAllowedModuleQualityOptions();

@@ -98,6 +98,12 @@ func fetchItemDetailsFromWiki(item string) (ItemWikiDetails, error) {
 }
 
 func fetchWikiWikitext(pageTitle string) (string, error) {
+	start := time.Now()
+	metricsCollector.wikiFetchTotal.Add(1)
+	defer func() {
+		metricsCollector.wikiFetchLatencyNs.Add(uint64(time.Since(start).Nanoseconds()))
+	}()
+
 	values := url.Values{}
 	values.Set("action", "parse")
 	values.Set("page", pageTitle)
@@ -114,27 +120,33 @@ func fetchWikiWikitext(pageTitle string) (string, error) {
 	client := http.Client{Timeout: 8 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		metricsCollector.wikiFetchErrors.Add(1)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		metricsCollector.wikiFetchErrors.Add(1)
 		return "", fmt.Errorf("wiki request failed with status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		metricsCollector.wikiFetchErrors.Add(1)
 		return "", err
 	}
 
 	var parsed wikiParseResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
+		metricsCollector.wikiFetchErrors.Add(1)
 		return "", err
 	}
 	if parsed.Error != nil {
+		metricsCollector.wikiFetchErrors.Add(1)
 		return "", fmt.Errorf("wiki parse error: %s", parsed.Error.Info)
 	}
 	if strings.TrimSpace(parsed.Parse.Wikitext) == "" {
+		metricsCollector.wikiFetchErrors.Add(1)
 		return "", fmt.Errorf("wiki page %q has empty wikitext", pageTitle)
 	}
 	return parsed.Parse.Wikitext, nil

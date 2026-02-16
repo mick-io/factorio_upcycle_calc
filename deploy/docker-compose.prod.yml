@@ -1,0 +1,37 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SERVER_ADDR: ":8080"
+      CACHE_DIR: "/app/docs/cache"
+      REQUIRE_NON_ROOT: "true"
+      RATE_LIMIT_ENABLED: "true"
+      ENFORCE_HTTPS: "false"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - app_cache:/app/docs/cache
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  app_cache:
+  caddy_data:
+  caddy_config:

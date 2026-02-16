@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"html"
 	"log"
@@ -9,8 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/mick-io/factorio_upcycle_calc/internal"
 )
@@ -100,6 +103,11 @@ func scaledModuleBonus(moduleID string, baseBonus float64, qualityMultiplier flo
 }
 
 func main() {
+	appCfg, err := loadAppConfigFromEnv()
+	if err != nil {
+		log.Fatalf("invalid runtime configuration: %v", err)
+	}
+
 	recyclableItems, err := loadRecyclableItems("docs/recyclable-items.txt")
 	if err != nil {
 		log.Printf("warning: failed to load recyclable items: %v", err)
@@ -117,9 +125,13 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	cacheDir := appCfg.CacheDir
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/index.html")
 	})
+	mux.HandleFunc("/metrics", metricsHandler(metricsCollector))
+	mux.HandleFunc("/healthz", healthzHandler)
+	mux.HandleFunc("/readyz", readyzHandler(cacheDir))
 	mux.HandleFunc("/partials/recyclable-items", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -369,6 +381,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid machine productivity.</p>`))
 			return
 		}
+		machineProductivity = clampFloat(machineProductivity, minMachineProductivityPct, maxMachineProductivityPct)
 
 		machineCraftSpeed, err := parseFloat(r.FormValue("machine_craft_speed"), "machine craft speed")
 		if err != nil {
@@ -376,6 +389,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid machine craft speed.</p>`))
 			return
 		}
+		machineCraftSpeed = clampFloat(machineCraftSpeed, minMachineCraftSpeed, maxMachineCraftSpeed)
 
 		machineQualityPercentage, err := parseFloat(r.FormValue("machine_quality_percentage"), "machine quality percentage")
 		if err != nil {
@@ -383,6 +397,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid machine quality percentage.</p>`))
 			return
 		}
+		machineQualityPercentage = clampFloat(machineQualityPercentage, minMachineQualityPct, maxMachineQualityPct)
 
 		baseOutputPerCraft, err := parseFloat(r.FormValue("base_output_per_craft"), "base output per craft")
 		if err != nil {
@@ -390,6 +405,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid base output per craft.</p>`))
 			return
 		}
+		baseOutputPerCraft = clampFloat(baseOutputPerCraft, minBaseOutputPerCraft, maxBaseOutputPerCraft)
 
 		baseCraftTimeSeconds, err := parseFloat(r.FormValue("base_craft_time_seconds"), "base craft time seconds")
 		if err != nil {
@@ -397,6 +413,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid base craft time.</p>`))
 			return
 		}
+		baseCraftTimeSeconds = clampFloat(baseCraftTimeSeconds, minBaseCraftTimeSec, maxBaseCraftTimeSec)
 
 		recyclerCraftSpeed, err := parseFloat(r.FormValue("recycler_craft_speed"), "recycler craft speed")
 		if err != nil {
@@ -404,6 +421,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid recycler craft speed.</p>`))
 			return
 		}
+		recyclerCraftSpeed = clampFloat(recyclerCraftSpeed, minRecyclerCraftSpeed, maxRecyclerCraftSpeed)
 
 		recyclerQualityPercentage, err := parseFloat(r.FormValue("recycler_quality_percentage"), "recycler quality percentage")
 		if err != nil {
@@ -411,6 +429,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid recycler quality percentage.</p>`))
 			return
 		}
+		recyclerQualityPercentage = clampFloat(recyclerQualityPercentage, minRecyclerQualityPct, maxRecyclerQualityPct)
 
 		baseRecycleInputPerCycle, err := parseFloat(r.FormValue("base_recycle_input_per_cycle"), "base recycle input per cycle")
 		if err != nil {
@@ -418,6 +437,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid recycle input per cycle.</p>`))
 			return
 		}
+		baseRecycleInputPerCycle = clampFloat(baseRecycleInputPerCycle, minRecycleInputPerCycle, maxRecycleInputPerCycle)
 
 		baseRecycleTimeSeconds, err := parseFloat(r.FormValue("base_recycle_time_seconds"), "base recycle time seconds")
 		if err != nil {
@@ -425,6 +445,7 @@ func main() {
 			_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid base recycle time.</p>`))
 			return
 		}
+		baseRecycleTimeSeconds = clampFloat(baseRecycleTimeSeconds, minRecycleTimeSec, maxRecycleTimeSec)
 
 		planInput := internal.PlanInput{
 			TargetQuality: targetQuality,
@@ -451,6 +472,7 @@ func main() {
 				_, _ = w.Write([]byte(`<p class="nes-text is-error">Invalid total machines.</p>`))
 				return
 			}
+			totalMachines = clampInt(totalMachines, minMachineCount, maxMachineCount)
 
 			plan, err = internal.BuildPlanFromTotalMachines(planInput, totalMachines)
 			if err != nil {
@@ -481,6 +503,7 @@ func main() {
 				)
 				return
 			}
+			anchorMachineCount = clampInt(anchorMachineCount, minMachineCount, maxMachineCount)
 
 			plan, err = internal.BuildPlanFromAnchorQuality(planInput, changedQuality, anchorMachineCount)
 			if err != nil {
@@ -498,9 +521,62 @@ func main() {
 		_, _ = w.Write([]byte(renderAllocationSection(plan)))
 	})
 
-	addr := ":8080"
-	log.Printf("listening on http://localhost%s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	addr := appCfg.Server.Addr
+	rateLimitConfig := appCfg.RateLimit
+	handler := withRequestLogging(
+		withMetrics(
+			withHTTPSRedirect(
+				withSecurityHeaders(withRateLimit(mux, rateLimitConfig)),
+				appCfg.EnforceHTTPS,
+				appCfg.HTTPSTrustProxy,
+			),
+			metricsCollector,
+		),
+		rateLimitConfig.TrustProxy,
+		log.Default(),
+	)
+
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  appCfg.Server.ReadTimeout,
+		WriteTimeout: appCfg.Server.WriteTimeout,
+		IdleTimeout:  appCfg.Server.IdleTimeout,
+	}
+	shutdownTimeout := appCfg.Server.ShutdownTimeout
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Printf("listening on http://localhost%s", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	case <-signalCtx.Done():
+		log.Printf("shutdown signal received, draining active requests")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+		if closeErr := server.Close(); closeErr != nil {
+			log.Printf("forced server close failed: %v", closeErr)
+		}
+	}
+
+	if err := <-serverErr; err != nil {
 		log.Fatal(err)
 	}
 }
@@ -989,8 +1065,9 @@ func recycleTimeSourceFromCraftTime(baseCraftTimeSeconds float64) float64 {
 }
 
 func calculateRecyclerStats(values url.Values, baseRecycleTimeSeconds float64) recyclerStats {
-	baseCraftSpeed := parseFloatDefault(values.Get("base_recycler_craft_speed"), 0.5)
-	baseQuality := parseFloatDefault(values.Get("base_recycler_quality_percentage"), 0)
+	baseCraftSpeed := clampFloat(parseFloatDefault(values.Get("base_recycler_craft_speed"), 0.5), minRecyclerCraftSpeed, maxRecyclerCraftSpeed)
+	baseQuality := clampFloat(parseFloatDefault(values.Get("base_recycler_quality_percentage"), 0), minRecyclerQualityPct, maxRecyclerQualityPct)
+	baseRecycleTimeSeconds = clampFloat(baseRecycleTimeSeconds, minRecycleTimeSec, maxRecycleTimeSec)
 	if baseRecycleTimeSeconds <= 0 {
 		baseRecycleTimeSeconds = recycleTimeSourceFromCraftTime(defaultRecipeCraftTimeSeconds)
 	}

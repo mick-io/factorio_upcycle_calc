@@ -500,7 +500,8 @@ func main() {
 
 	addr := ":8080"
 	log.Printf("listening on http://localhost%s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	handler := withSecurityHeaders(withRateLimit(mux, loadRateLimitConfig()))
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }

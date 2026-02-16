@@ -503,7 +503,12 @@ func main() {
 	})
 
 	addr := ":8080"
-	handler := withSecurityHeaders(withRateLimit(mux, loadRateLimitConfig()))
+	rateLimitConfig := loadRateLimitConfig()
+	handler := withRequestLogging(
+		withSecurityHeaders(withRateLimit(mux, rateLimitConfig)),
+		rateLimitConfig.TrustProxy,
+		log.Default(),
+	)
 
 	server := &http.Server{
 		Addr:         addr,

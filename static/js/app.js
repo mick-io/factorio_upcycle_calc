@@ -1,1 +1,3 @@
-console.log("factorio-upcycle-calc scaffold loaded");
+setupMachineStatRecalculationDelegation();
+resetRecyclerModuleDefaults();
+setupMaxQualityDropdown();

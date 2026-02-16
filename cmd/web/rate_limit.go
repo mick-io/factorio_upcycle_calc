@@ -203,3 +203,16 @@ func parseEnvIntMin(key string, fallback int, min int) int {
 	}
 	return parsed
 }
+
+func parseEnvDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+
+	parsed, err := time.ParseDuration(raw)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}

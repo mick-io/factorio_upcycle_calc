@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"html"
 	"log"
@@ -9,8 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/mick-io/factorio_upcycle_calc/internal"
 )
@@ -499,9 +503,49 @@ func main() {
 	})
 
 	addr := ":8080"
-	log.Printf("listening on http://localhost%s", addr)
 	handler := withSecurityHeaders(withRateLimit(mux, loadRateLimitConfig()))
-	if err := http.ListenAndServe(addr, handler); err != nil {
+
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  parseEnvDuration("SERVER_READ_TIMEOUT", 10*time.Second),
+		WriteTimeout: parseEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+		IdleTimeout:  parseEnvDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+	}
+	shutdownTimeout := parseEnvDuration("SERVER_SHUTDOWN_TIMEOUT", 15*time.Second)
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Printf("listening on http://localhost%s", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	case <-signalCtx.Done():
+		log.Printf("shutdown signal received, draining active requests")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+		if closeErr := server.Close(); closeErr != nil {
+			log.Printf("forced server close failed: %v", closeErr)
+		}
+	}
+
+	if err := <-serverErr; err != nil {
 		log.Fatal(err)
 	}
 }

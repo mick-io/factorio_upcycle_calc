@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -100,5 +101,23 @@ func TestWithRateLimit_StaticBypass(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("static request %d status got %d, want 200", i+1, rr.Code)
 		}
+	}
+}
+
+func TestParseEnvDuration(t *testing.T) {
+	key := "TEST_PARSE_ENV_DURATION"
+	t.Setenv(key, "2s")
+	if got := parseEnvDuration(key, time.Second); got != 2*time.Second {
+		t.Fatalf("parsed duration got %v, want 2s", got)
+	}
+
+	t.Setenv(key, "invalid")
+	if got := parseEnvDuration(key, time.Second); got != time.Second {
+		t.Fatalf("invalid value fallback got %v, want 1s", got)
+	}
+
+	_ = os.Unsetenv(key)
+	if got := parseEnvDuration(key, 3*time.Second); got != 3*time.Second {
+		t.Fatalf("missing env fallback got %v, want 3s", got)
 	}
 }
